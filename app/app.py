@@ -16,7 +16,6 @@ def home():
     grade = request.args.get('grade')
     year = request.args.get('year')
 
-    # BASE QUERY
     base_query = """
         FROM students s
         JOIN student_records r ON s.lrn = r.lrn
@@ -33,15 +32,16 @@ def home():
         base_query += " AND r.school_year = %s"
         params.append(year)
 
-    # 🥇 GET STUDENTS
+    # GET STUDENTS
     cursor.execute("SELECT s.lrn, s.name, r.gender " + base_query, params)
     students = cursor.fetchall()
 
+    # METRICS
     cursor.execute("""
-    SELECT 
-        COUNT(*),
-        SUM(CASE WHEN UPPER(r.gender) LIKE 'M%' THEN 1 ELSE 0 END),
-        SUM(CASE WHEN UPPER(r.gender) LIKE 'F%' THEN 1 ELSE 0 END)
+        SELECT 
+            COUNT(*),
+            SUM(CASE WHEN UPPER(r.gender) LIKE 'M%' THEN 1 ELSE 0 END),
+            SUM(CASE WHEN UPPER(r.gender) LIKE 'F%' THEN 1 ELSE 0 END)
     """ + base_query, params)
 
     result = cursor.fetchone()
@@ -50,12 +50,16 @@ def home():
     male = result[1] or 0
     female = result[2] or 0
 
-    # 🧠 CALCULATE %
     male_pct = round((male / total) * 100, 2) if total > 0 else 0
     female_pct = round((female / total) * 100, 2) if total > 0 else 0
 
     cursor.close()
     conn.close()
+
+    try:
+        retention = compute_retention("2024-2025", "2025-2026")
+    except:
+        retention = {"rate": 0, "retained": 0, "dropped": 0}
 
     return render_template(
         "index.html",
@@ -64,8 +68,10 @@ def home():
         male=male,
         female=female,
         male_pct=male_pct,
-        female_pct=female_pct
+        female_pct=female_pct,
+        retention=retention
     )
+
 def get_metrics():
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -78,11 +84,51 @@ def get_metrics():
 
     return total
 
+def compute_retention(year1, year2):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Retained (intersection)
+    cursor.execute("""
+        SELECT COUNT(*) 
+        FROM student_records r1
+        JOIN student_records r2 
+        ON r1.lrn = r2.lrn
+        WHERE r1.school_year = %s
+        AND r2.school_year = %s
+    """, (year1, year2))
+
+    retained = cursor.fetchone()[0]
+
+    # Total in year1
+    cursor.execute("""
+        SELECT COUNT(DISTINCT lrn)
+        FROM student_records
+        WHERE school_year = %s
+    """, (year1,))
+
+    total_year1 = cursor.fetchone()[0]
+
+    dropped = total_year1 - retained
+
+    retention_rate = (retained / total_year1 * 100) if total_year1 > 0 else 0
+
+    cursor.close()
+    conn.close()
+
+    return {
+        "retained": retained,
+        "dropped": dropped,
+        "rate": round(retention_rate, 2)
+    }
 
 @app.route('/upload', methods=['POST'])
 def upload():
     try:
         file = request.files['file']
+
+        school_year = request.form.get('school_year')
+        grade_level = request.form.get('grade_level')
 
         if not file:
             return "No file uploaded"
@@ -170,11 +216,9 @@ def upload():
             """, (lrn, name))
 
             cursor.execute("""
-                INSERT INTO student_records (lrn, school_year, grade_level, gender, status)
-                VALUES (%s, %s, %s, %s, %s)
-            """, (lrn, "2025-2026", 10, gender, "ENROLLED"))
-
-            inserted += 1
+            INSERT INTO student_records (lrn, school_year, grade_level, gender, status)
+            VALUES (%s, %s, %s, %s, %s)
+            """, (lrn, school_year, grade_level, gender, "ENROLLED"))
 
         conn.commit()
         cursor.close()

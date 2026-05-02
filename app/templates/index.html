@@ -151,11 +151,26 @@
     <!-- LEFT PANEL -->
     <div class="card left-panel">
         <h3>Import Data</h3>
-        <form action="/upload" method="post" enctype="multipart/form-data">
-            <input type="file" name="file" required>
-            <br><br>
-            <button type="submit">Upload</button>
-        </form>
+       <form action="/upload" method="post" enctype="multipart/form-data">
+
+    <input type="file" name="file" required>
+
+    <br><br>
+
+    <select name="school_year">
+        <option value="2024-2025">2024-2025</option>
+        <option value="2025-2026">2025-2026</option>
+    </select>
+
+    <select name="grade_level">
+        <option value="9">Grade 9</option>
+        <option value="10">Grade 10</option>
+    </select>
+
+    <br><br>
+
+    <button type="submit">Upload</button>
+</form>
     </div>
 
     <!-- RIGHT PANEL -->
@@ -194,6 +209,13 @@
             <div class="metric-box">Male<br>{{ male|default(0) }}</div>
             <div class="metric-box">Female<br>{{ female|default(0) }}</div>
         </div>
+
+        <div class="metric" style="margin-top:15px;">
+    <p>Retention Rate: {{ retention.rate }}%</p>
+    <p>Retained Students: {{ retention.retained }}</p>
+    <p>Dropped Students: {{ retention.dropped }}</p>
+</div>
+
 
         <!-- PROGRESS BARS -->
         <div class="progress-container">
